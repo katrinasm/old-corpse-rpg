@@ -1,0 +1,44 @@
+Corpse Coding Conventions
+
+The astonishingly obselete SNES CPU provides a number of unique challenges to achieving the tiniest amount of legibility in code. This document describes a series of elaborate work-arounds which are intended to make code operate similarly "in the large"; I have put forth what I believe is a reasonable compromise between the necessary optimization hacks and legibility required and acceptable to write a Super Nintendo game.
+
+======================= SECTION 1. CALLING CONVENTIONS =======================
+
+A leading issue is the lack of a reliably-established calling convention for the SNES, which has to accomodate a few issues:
+	0. The enormously lackluster performance of the 65c816,
+	1. The low quantity of registers,
+	2. The 8/16 bit register width flags,
+	3. The specificity of registers.
+
+Issue (0) is, regrettably, insurmountable by a calling convention. As such, the solutions to issues 1-3 suffer greatly at its behest.
+
+Issue (1) is "fortunately" so impossible to avoid that a common solution has emerged: use a small section of the zero page (6502) or direct page (65c816) as a sort of pseudo-register, passing routine arguments and sometimes return values around in them.
+
+This project's take on this selects addresses $00-$1f of the direct page to serve as pseudo-registers. $00-$0f must be preserved for the calling subroutine. $10-$1f may be clobbered freely.
+
+That $00-$1f are freely writable and that $10-$1f need not be preserved are required to call *any* subroutine, *regardless* of where the direct page is pointed. This means that pointing the direct page outside the WRAM area of bank 0 ($00:$0000-$1fff) effectively disallows the calling of any proper subroutines. (This should be rare; the only really useful other places to put it are the PPU and CPU memory-mapped registers).
+
+This means any data structures which you expect to point the direct page at should have 32 bytes free at the start for a "call context" if you intend to use them for anything meaningful. (An example of such a structure is the sprite.)
+
+Issue (2) is commonly simply not dealt with; as far as I am aware many SNES games would simply crash if a routine is called with the wrong flags. This is usually not a huge problem: most routines doing 8 or 16-bit arithmetic tend to be called by routines doing the same kind of arithmetic.
+
+It can be resolved by requiring all routines to preserve the m and x flags. However, this results in a lot of code (for a game with enough room for only a few hundred kilobytes or so, tops, of code) devoted exclusively to settings bit twiddling, for the small gain of being able to call routines of non-matching register width when in practice most of the time the same width is desired. This also goes poorly with (0).
+
+As such, this project uses flag annotations, that is, a comment above each subroutine describing the expected register widths to call the subroutine and when the subroutine returns.
+The format of these annotations is as follows:
+	// mx -> mx
+	Where 'm' and 'x' match their processor flags.
+	The 'm' or 'x' is capitalized for the flag set (8-bit) or lowercase for clear (16-bit).
+	A '.' may appear instead of the m or x.
+	If on the left, this means that the function may be called safely with either value of the flag.
+	If on the right, this means that the returning flag matches the flag the routine was called with. The '.' is only used on the right if it was used on the left for the same flag.
+By far the most common flag annotation is "Mx -> Mx", that is to say: most routines expect the accumulator and memory to be 8 bits wide, but the address registers X and Y to be 16 bits wide, and will return with the flags set as such.
+The proposed "always save the flags" solution would basically have an annotation of ".. -> ..".
+
+Issue (3) results in a lot of difficulty in terms of passing arguments and returning values.
+In accordance with (0), passing arguments in registers is greatly preferred.
+However, the variable width of registers and the hyper-specifity of their use prevents a universal convention from being particularly useful. As such, routines are expected to contain a comment explaining the placement and nature of their arguments.
+
+For the most part, routines expect 16-bit arguments in X and Y, 8-bit arguments in A, and any remaining arguments in $10-$1f.
+Addresses (24-bit) are commonly passed with the 16-bit offset in X or Y and the bank in A. The bank of an address could be passed in the DBR - in this way "$0000,x" or "$0000,y" could be used as the address as soon as the routine begins.
+Sprites use the direct page as a sort of "this" pointer. This has the implication that sprites cannot be moved outside of $00:$0000-$1fff, or all sprite code will have to be almost completely rewritten.
