@@ -22,14 +22,7 @@ RESET:
 	phk; plb;	// Move data bank into FastROM mirror region
 	rep #$20; lda #>addr.stacktop; tas; sep #$20;	// Update stack position
 	rep #$10;	// The game uses 16-bit addresses when possible.
-	
-	lda #$00
-	sec
-	sbc #$ff
-	lda #$00
-	clc
-	sbc #$ff
-	
+
 	jml cmain.Init;
 
 addr.seek(ENGINE_BEGIN);
